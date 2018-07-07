@@ -4,14 +4,15 @@ extern crate serde;
 extern crate serde_json;
 extern crate float_ord;
 extern crate rayon;
+extern crate chrono;
 
-use std::fmt;
 use std::env::args;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use rayon::prelude::*;
+use chrono::prelude::*;
 
 
 const CAP: usize = 50;
@@ -62,7 +63,11 @@ struct Similar {
 
 fn main() {
     let path = args().nth(1).unwrap();
+    let chunk: usize = args().nth(2).unwrap().parse().unwrap();
+    // let nchunks: u32 = args().nth(3).unwrap().parse().unwrap();
     let file = File::open(&path).unwrap();
+
+    eprintln!("[{}] START {}", Local::now().format("%Y-%m-%d %H:%M:%S").to_string(), &path);
 
     let products: Vec<SparseVector> =
         BufReader::new(file).lines()
@@ -70,10 +75,25 @@ fn main() {
         .map(|line| serde_json::from_str(&line) as Result<SparseVector, serde_json::Error>)
         .map(|pbow| pbow.unwrap())
         .collect();
+    
+    eprintln!("[{}] INTAKE COMPLETED", Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
 
-    for s in products.iter().map(|prod| topn(prod, &products)).map(|sims| serde_json::to_string(&sims).unwrap()) {
-        println!("{}", s)
-    }
+    let total: usize = products[0..chunk].par_iter()
+        .map(|prod| topn(prod, &products))
+        .map(|sims| serde_json::to_string(&sims).unwrap())
+        .map(|strn| {
+            println!("{}", strn);
+            1
+        })
+        .sum();
+    
+    eprintln!(
+        "[{}] DONE IN {} PASSES OVER {} PRODUCTS, TOTALING {} OPERATIONS",
+        Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        &total,
+        products.len(),
+        &total*products.len(),
+    );
 }
 
 
