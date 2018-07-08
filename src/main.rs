@@ -14,39 +14,41 @@ use std::cmp::Ordering;
 use rayon::prelude::*;
 use chrono::prelude::*;
 
+mod vecs;
+use vecs::{Distances, SparseVector};
+
 
 const CAP: usize = 50;
 
-#[derive(Deserialize)]
-struct SparseVector {
+#[derive(Serialize, Deserialize)]
+struct Wrap {
     #[serde(rename = "pid")]
     id: String,
-    #[serde(rename = "features")]
-    pos: Vec<u32>,
-    #[serde(rename = "scores")]
-    val: Vec<f32>,
+    #[serde(flatten)]
+    vector: SparseVector,
 }
 
 #[derive(Clone, PartialEq, Eq)]
-struct Cosine {
+struct Cmp {
     id: String,
     val: float_ord::FloatOrd<f32>,
 }
 
-impl PartialOrd for Cosine {
-    fn partial_cmp(&self, other: &Cosine) -> Option<Ordering> {
+impl PartialOrd for Cmp {
+    fn partial_cmp(&self, other: &Cmp) -> Option<Ordering> {
         other.val.partial_cmp(&self.val)
     }
 }
 
-impl Ord for Cosine {
-    fn cmp(&self, other: &Cosine) -> Ordering {
+impl Ord for Cmp {
+    fn cmp(&self, other: &Cmp) -> Ordering {
         other.val.cmp(&self.val)
     }
 }
 
+
 #[derive(Serialize)]
-struct CosineClean {
+struct CmpClean {
     #[serde(rename = "pid")]
     id: String,
     sim: f32,
@@ -56,7 +58,7 @@ struct CosineClean {
 struct Similar {
     #[serde(rename = "pid")]
     id: String,
-    similar: Vec<CosineClean>,
+    similar: Vec<CmpClean>,
 }
 
 
@@ -69,10 +71,10 @@ fn main() {
 
     eprintln!("[{}] START {}", Local::now().format("%Y-%m-%d %H:%M:%S").to_string(), &path);
 
-    let products: Vec<SparseVector> =
+    let products: Vec<Wrap> =
         BufReader::new(file).lines()
         .map(|line| line.unwrap())
-        .map(|line| serde_json::from_str(&line) as Result<SparseVector, serde_json::Error>)
+        .map(|line| serde_json::from_str(&line) as Result<Wrap, serde_json::Error>)
         .map(|pbow| pbow.unwrap())
         .collect();
     
@@ -97,40 +99,24 @@ fn main() {
 }
 
 
-fn topn(reference: &SparseVector, products: &Vec<SparseVector>) -> Similar {
-    let mut heap = BinaryHeap::from(vec![Cosine{id: "--".to_owned(), val: float_ord::FloatOrd(0.)}; CAP]);
+fn topn(reference: &Wrap, products: &Vec<Wrap>) -> Similar {
+    let mut heap = BinaryHeap::from(vec![Cmp{id: "--".to_owned(), val: float_ord::FloatOrd(0.)}; CAP]);
 
     for prod in products {
-        let cos = if reference.pos.len() <= prod.pos.len() { cosine(reference, prod) } else { cosine(prod, reference) };
+        let cos = reference.vector.cosine(&prod.vector);
         if cos >= heap.peek().unwrap().val.0 && prod.id != reference.id {
             heap.pop();
-            heap.push(Cosine{
+            heap.push(Cmp{
                 id: prod.id.clone(),
                 val: float_ord::FloatOrd(cos),
             });
         }
     }
 
-    let ub: Vec<CosineClean> = heap.into_sorted_vec().into_iter()
+    let ub: Vec<CmpClean> = heap.into_sorted_vec().into_iter()
         .filter(|cos| cos.id != "--")
-        .map(|cos| CosineClean{id: cos.id, sim: cos.val.0})
+        .map(|cos| CmpClean{id: cos.id, sim: cos.val.0})
         .collect();
 
     Similar{id: reference.id.clone(), similar: ub}
-}
-
-
-fn cosine(reference: &SparseVector, comparison: &SparseVector) -> f32 {
-    let numerator =
-        reference.pos.iter()
-        .enumerate()
-        .map(|(refidx, feature)| {
-            match comparison.pos.binary_search(&feature) {
-                Ok(cmpidx) => reference.val[refidx] * comparison.val[cmpidx],
-                _ => 0 as f32,
-            }
-        })
-        .sum();
-
-    numerator
 }
