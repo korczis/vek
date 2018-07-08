@@ -38,48 +38,45 @@ impl Distances for SparseVector {
     fn norm(&self) -> f32 { self.value.iter().map(|value| value.powi(2)).sum::<f32>().sqrt() }
 
     fn cosine(&self, other: &SparseVector) -> f32 {
-        if self.index.len() > other.index.len() {
-            other.cosine(self)
-        } else {
-            // let mut reference = self.index.iter().zip(self.value.iter());
-            // let mut comparison = other.index.iter().zip(other.value.iter());
-            let mut accumulator = 0f32;
-            let (mut i, mut j) = (0, 0);
+        let (mut accumulator, mut refiter, mut cmpiter) = (0f32, 0usize, 0usize);
 
-            while i < self.index.len() && j < other.index.len() {
-                let (a_index, a_value) = (self.index[i], self.value[i]);
-                let (b_index, b_value) = (other.index[j], other.value[j]);
+        while refiter < self.index.len() && cmpiter < other.index.len() {
+            let (refidx, refval) = (self.index[refiter], self.value[refiter]);
+            let (cmpidx, cmpval) = (other.index[cmpiter], other.value[cmpiter]);
 
-                match a_index.cmp(&b_index) {
-                    Ordering::Equal => {
-                        accumulator += a_value.mul_add(b_value, accumulator);
-                        i += 1;
-                        j += 1;
-                    },
-                    Ordering::Less => i += 1,
-                    Ordering::Greater => j += 1,
-                };
-            }
-
-            accumulator
+            match refidx.cmp(&cmpidx) {
+                Ordering::Equal => {
+                    accumulator = refval.mul_add(cmpval, accumulator);
+                    refiter += 1;
+                    cmpiter += 1;
+                },
+                Ordering::Less => refiter += 1,
+                Ordering::Greater => cmpiter += 1,
+            };
         }
+
+        accumulator
     }
 
     fn euclidean(&self, other: &SparseVector) -> f32 {
-        if self.index.len() > other.index.len() {
-            other.cosine(self)
-        } else {
-            self.index.iter()
-            .enumerate()
-            .map(|(reference, index)| {
-                match other.index.binary_search(&index) {
-                    Ok(comparison) => (self.value[reference] - other.value[comparison]).powi(2),
-                    _ => 0f32,
-                }
-            })
-            .sum::<f32>()
-            .sqrt()
+        let (mut accumulator, mut refiter, mut cmpiter) = (0f32, 0usize, 0usize);
+
+        while refiter < self.index.len() && cmpiter < other.index.len() {
+            let (refidx, refval) = (self.index[refiter], self.value[refiter]);
+            let (cmpidx, cmpval) = (other.index[cmpiter], other.value[cmpiter]);
+
+            match refidx.cmp(&cmpidx) {
+                Ordering::Equal => {
+                    accumulator += (refval - cmpval).powi(2);
+                    refiter += 1;
+                    cmpiter += 1;
+                },
+                Ordering::Less => refiter += 1,
+                Ordering::Greater => cmpiter += 1,
+            };
         }
+
+        accumulator.sqrt()
     }
 }
 
