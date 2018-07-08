@@ -83,11 +83,8 @@ fn main() {
     let total: usize = products[0..chunk].par_iter()
         .map(|prod| topn(prod, &products))
         .map(|sims| serde_json::to_string(&sims).unwrap())
-        .map(|strn| {
-            println!("{}", strn);
-            1
-        })
-        .sum();
+        .map(|strn| println!("{}", strn))
+        .count();
     
     eprintln!(
         "[{}] DONE IN {} PASSES OVER {} PRODUCTS, TOTALING {} OPERATIONS",

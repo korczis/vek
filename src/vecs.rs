@@ -1,5 +1,6 @@
 extern crate serde;
 extern crate serde_json;
+use std::cmp::Ordering;
 
 // index MUST be ordered and not contain repeated elements
 // index.len() MUST be equal to value.len()
@@ -40,11 +41,25 @@ impl Distances for SparseVector {
         if self.index.len() > other.index.len() {
             other.cosine(self)
         } else {
-            let mut reference = self.index.iter().zip(self.value.iter());
-            let mut comparison = other.index.iter().zip(other.value.iter());
+            // let mut reference = self.index.iter().zip(self.value.iter());
+            // let mut comparison = other.index.iter().zip(other.value.iter());
             let mut accumulator = 0f32;
+            let (mut i, mut j) = (0, 0);
 
-            // TODO
+            while i < self.index.len() && j < other.index.len() {
+                let (a_index, a_value) = (self.index[i], self.value[i]);
+                let (b_index, b_value) = (other.index[j], other.value[j]);
+
+                match a_index.cmp(&b_index) {
+                    Ordering::Equal => {
+                        accumulator += a_value.mul_add(b_value, accumulator);
+                        i += 1;
+                        j += 1;
+                    },
+                    Ordering::Less => i += 1,
+                    Ordering::Greater => j += 1,
+                };
+            }
 
             accumulator
         }
