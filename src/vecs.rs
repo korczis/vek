@@ -34,21 +34,19 @@ pub trait Transformations {
 
 
 impl Distances for SparseVector {
-    fn norm(&self) -> f32 { self.value.iter().map(|x| x.powi(2)).sum::<f32>().sqrt() }
+    fn norm(&self) -> f32 { self.value.iter().map(|value| value.powi(2)).sum::<f32>().sqrt() }
 
     fn cosine(&self, other: &SparseVector) -> f32 {
         if self.index.len() > other.index.len() {
             other.cosine(self)
         } else {
-            self.index.iter()
-            .enumerate()
-            .map(|(reference, index)| {
-                match other.index.binary_search(&index) {
-                    Ok(comparison) => self.value[reference] * other.value[comparison],
-                    _ => 0f32,
-                }
-            })
-            .sum()
+            let mut reference = self.index.iter().zip(self.value.iter());
+            let mut comparison = other.index.iter().zip(other.value.iter());
+            let mut accumulator = 0f32;
+
+            // TODO
+
+            accumulator
         }
     }
 
@@ -60,7 +58,7 @@ impl Distances for SparseVector {
             .enumerate()
             .map(|(reference, index)| {
                 match other.index.binary_search(&index) {
-                    Ok(comparison) => self.value[reference] - other.value[comparison],
+                    Ok(comparison) => (self.value[reference] - other.value[comparison]).powi(2),
                     _ => 0f32,
                 }
             })
@@ -72,17 +70,16 @@ impl Distances for SparseVector {
 
 
 impl Distances for DenseVector {
-    fn norm(&self) -> f32 { self.value.iter().map(|x| x.powi(2)).sum::<f32>().sqrt() }
+    fn norm(&self) -> f32 { self.value.iter().map(|value| value.powi(2)).sum::<f32>().sqrt() }
 
     fn cosine(&self, other: &DenseVector) -> f32 {
         self.value.iter().zip(other.value.iter())
-        .map(|tup| tup.0 * tup.1)
-        .sum()
+        .fold(0f32, |accumulator, (reference, comparison)| reference.mul_add(*comparison, accumulator))
     }
 
     fn euclidean(&self, other: &DenseVector) -> f32 {
         self.value.iter().zip(other.value.iter())
-        .map(|tup| tup.0 - tup.1)
+        .map(|(reference, comparison)| (reference - comparison).powi(2))
         .sum::<f32>()
         .sqrt()
     }
