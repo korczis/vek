@@ -15,7 +15,9 @@ pub struct SparseVector {
 
 
 // ALL vector comparisons must be between vectors of equal value.len() != 0
+#[derive(Serialize, Deserialize)]
 pub struct DenseVector {
+    #[serde(rename = "scores")]
     pub value: Vec<f32>,
 }
 

@@ -5,6 +5,7 @@ extern crate serde_json;
 extern crate float_ord;
 extern crate rayon;
 extern crate chrono;
+extern crate clap;
 
 use std::env::args;
 use std::fs::File;
@@ -13,6 +14,7 @@ use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use rayon::prelude::*;
 use chrono::prelude::*;
+use clap::{Arg, App, SubCommand};
 
 mod vecs;
 use vecs::{Distances, SparseVector};
@@ -21,11 +23,11 @@ use vecs::{Distances, SparseVector};
 const CAP: usize = 50;
 
 #[derive(Serialize, Deserialize)]
-struct Wrap {
+struct Wrap<VT> {
     #[serde(rename = "pid")]
     id: String,
     #[serde(flatten)]
-    vector: SparseVector,
+    vector: VT,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -64,6 +66,29 @@ struct Similar {
 
 
 fn main() {
+    let matches = App::new("vek")
+        .version("0.0.0")
+        .arg(Arg::with_name("sparsity")
+            .short("s")
+            .long("sparse")
+            .takes_value(true))
+        .arg(Arg::with_name("INPUT")
+            .help("Sets the input file to use")
+            .required(true)
+            .index(1))
+        .arg(Arg::with_name("v")
+            .short("v")
+            .multiple(true)
+            .help("Sets the level of verbosity"))
+        .subcommand(SubCommand::with_name("test")
+            .about("controls testing features")
+            .version("1.3")
+            .author("Someone E. <someone_else@other.com>")
+            .arg(Arg::with_name("debug")
+                .short("d")
+                .help("print debug information verbosely")))
+        .get_matches();
+
     let path = args().nth(1).unwrap();
     let chunk: usize = args().nth(2).unwrap().parse().unwrap();
     // let nchunks: u32 = args().nth(3).unwrap().parse().unwrap();
@@ -71,16 +96,16 @@ fn main() {
 
     eprintln!("[{}] START {}", Local::now().format("%Y-%m-%d %H:%M:%S").to_string(), &path);
 
-    let products: Vec<Wrap> =
+    let products: Vec<Wrap<SparseVector>> =
         BufReader::new(file).lines()
         .map(|line| line.unwrap())
-        .map(|line| serde_json::from_str(&line) as Result<Wrap, serde_json::Error>)
+        .map(|line| serde_json::from_str(&line) as Result<Wrap<SparseVector>, serde_json::Error>)
         .map(|pbow| pbow.unwrap())
         .collect();
     
     eprintln!("[{}] INTAKE COMPLETED", Local::now().format("%Y-%m-%d %H:%M:%S").to_string());
 
-    let total: usize = products[0..chunk].par_iter()
+    let total: usize = products.par_iter()
         .map(|prod| topn(prod, &products))
         .map(|sims| serde_json::to_string(&sims).unwrap())
         .map(|strn| println!("{}", strn))
